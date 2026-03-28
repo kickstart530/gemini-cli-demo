@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
+          path: ${{ github.event.repository.name }}
           
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -28,4 +29,12 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-        run: python .github/scripts/agent.py
+          SCRIPT_PATH: ${{ github.workspace }}/${{ github.event.repository.name }}/.github/scripts/agent.py
+        run: |
+          if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "Missing script at: $SCRIPT_PATH"
+            echo "Contents of checkout:"
+            ls -la "${{ github.workspace }}/${{ github.event.repository.name }}"
+            exit 1
+          fi
+          python "$SCRIPT_PATH"
