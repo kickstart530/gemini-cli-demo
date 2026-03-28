@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
           
       - name: Install Agent Dependencies
-        run: pip install google-generativeai PyGithub
+        run: pip install google-genai PyGithub
         
       - name: Run Gemini Agent
         env:
@@ -39,7 +39,6 @@ jobs:
             echo "Contents of .github:"
             ls -la "${{ github.workspace }}/.github" || true
             echo "Contents of checkout:"
-            ls -la "${{ github.workspace }}"
             ls -la "${{ github.workspace }}"
             exit 1
           fi

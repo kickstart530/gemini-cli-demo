@@ -4,7 +4,7 @@ import subprocess
 import re
 import urllib.request
 import urllib.error
-import google.generativeai as genai
+from google import genai
 
 def github_api(method, endpoint, token, data=None):
     """Helper function to make GitHub API calls without third-party libraries."""
@@ -42,6 +42,75 @@ def get_codebase_context():
                 pass 
     return code_context
 
+def extract_response_text(response):
+    """Extract text from google.genai responses with graceful fallbacks."""
+    text = getattr(response, "text", None)
+    if text:
+        return text
+
+    candidates = getattr(response, "candidates", None) or []
+    parts_text = []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if part_text:
+                parts_text.append(part_text)
+    return "\n".join(parts_text).strip()
+
+def generate_with_fallback(api_key, prompt):
+    """Try a sequence of Gemini models and return the first successful response text."""
+    client = genai.Client(api_key=api_key)
+    requested_model = os.environ.get("GEMINI_MODEL", "").strip()
+
+    model_candidates = []
+    if requested_model:
+        model_candidates.append(requested_model)
+    model_candidates.extend([
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+    ])
+
+    attempted = set()
+    errors = []
+    for model_name in model_candidates:
+        if not model_name or model_name in attempted:
+            continue
+        attempted.add(model_name)
+        try:
+            print(f"Trying Gemini model: {model_name}")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            response_text = extract_response_text(response)
+            if not response_text:
+                raise RuntimeError("Empty response text.")
+            return response_text, model_name
+        except Exception as e:
+            errors.append(f"{model_name}: {e}")
+            print(f"Model failed: {model_name} -> {e}")
+
+    # Best-effort model listing for easier troubleshooting
+    try:
+        available = []
+        for model in client.models.list():
+            name = getattr(model, "name", "")
+            if name:
+                available.append(name)
+            if len(available) >= 25:
+                break
+        if available:
+            print("Available models (first 25):")
+            for name in available:
+                print(f"- {name}")
+    except Exception as list_error:
+        print(f"Could not list models: {list_error}")
+
+    raise RuntimeError("All model attempts failed: " + " | ".join(errors))
+
 def main():
     # 1. Load the only two required secrets
     github_token = os.environ.get("GITHUB_TOKEN")
@@ -67,17 +136,11 @@ def main():
     issue_title = issue.get("title")
     issue_body = issue.get("body") or "No description provided."
     repo_name = repo.get("full_name")
-    default_branch = repo.get("default_branch", "main")
 
     print(f"Analyzing Repository: {repo_name}")
     print(f"Issue #{issue_number}: {issue_title}")
 
-    # 3. Configure Gemini
-    genai.configure(api_key=gemini_api_key)
-    # Using Gemini 1.5 Pro to handle potentially massive codebase context windows
-    model = genai.GenerativeModel('gemini-1.5-pro') 
-
-    # 4. Construct the Prompt
+    # 3. Construct the Prompt
     system_prompt = f"""
     You are an expert autonomous software engineer resolving a GitHub issue.
 
@@ -103,12 +166,12 @@ def main():
     }}
     """
 
-    # 5. Call Gemini API
+    # 4. Call Gemini API
     print("Generating solution via Gemini...")
-    response = model.generate_content(system_prompt)
+    response_text, model_used = generate_with_fallback(gemini_api_key, system_prompt)
+    print(f"Gemini response received from model: {model_used}")
     
     # Clean the response to ensure we only parse JSON
-    response_text = response.text
     json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
     if not json_match:
         print("Error: Gemini response did not contain a JSON object.")
