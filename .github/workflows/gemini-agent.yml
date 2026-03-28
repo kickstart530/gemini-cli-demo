@@ -29,7 +29,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          SCRIPT_PATH: ${{ github.workspace }}/${{ github.event.repository.name }}/.github/scripts/agent.py
+          SCRIPT_PATH: ${{ github.workspace }}/.github/scripts/agent.py
         run: |
           if [ ! -f "$SCRIPT_PATH" ]; then
             echo "Missing script at: $SCRIPT_PATH"
