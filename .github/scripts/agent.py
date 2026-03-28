@@ -109,4 +109,44 @@ def main():
     
     # Clean the response to ensure we only parse JSON
     response_text = response.text
-    json_match = re.search(r'http://googleusercontent.com/immersive_entry_chip/1')
+    json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+    if not json_match:
+        print("Error: Gemini response did not contain a JSON object.")
+        print("Raw response:")
+        print(response_text)
+        exit(1)
+
+    try:
+        result = json.loads(json_match.group(0))
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse Gemini JSON output: {e}")
+        print("Raw response:")
+        print(response_text)
+        exit(1)
+
+    modifications = result.get("modifications", [])
+    if not isinstance(modifications, list):
+        print("Error: 'modifications' must be a list.")
+        exit(1)
+
+    print(f"Applying {len(modifications)} file modification(s)...")
+    for mod in modifications:
+        file_path = mod.get("file_path")
+        new_content = mod.get("new_content")
+        if not file_path or new_content is None:
+            print(f"Skipping invalid modification entry: {mod}")
+            continue
+
+        parent = os.path.dirname(file_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        print(f"Updated: {file_path}")
+
+    # Keep this step non-destructive by default.
+    subprocess.run(["git", "status", "--short"], check=False)
+    print("Agent completed local file updates.")
+
+if __name__ == "__main__":
+    main()
