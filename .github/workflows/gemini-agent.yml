@@ -1,0 +1,33 @@
+name: Gemini Issue Resolver
+
+on:
+  issues:
+    types: [assigned]
+
+jobs:
+  gemini_agent_run:
+    # Only run if assigned to the specific bot account
+    if: github.event.assignee.login == 'kickstart530'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Agent Dependencies
+        run: pip install google-generativeai PyGithub
+        
+      - name: Run Gemini Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python .github/scripts/agent.py
